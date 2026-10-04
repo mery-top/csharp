@@ -1,0 +1,545 @@
+@model IEnumerable<TaskPulse.Models.TaskItem>
+@{
+    var stats = ViewBag.Stats as TaskPulse.Models.DashboardStats ?? new TaskPulse.Models.DashboardStats();
+    var categories = ViewBag.Categories as IEnumerable<string> ?? Enumerable.Empty<string>();
+    var currentStatus = ViewBag.CurrentStatus as string;
+    var currentPriority = ViewBag.CurrentPriority as string;
+    var currentCategory = ViewBag.CurrentCategory as string;
+    var searchTerm = ViewBag.SearchTerm as string;
+}
+
+@section Styles {
+    <style>
+        /* Stats Dashboard Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: transform 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .stat-total { color: #f8fafc; }
+        .stat-todo { color: var(--accent-cyan); }
+        .stat-progress { color: var(--accent-purple); }
+        .stat-completed { color: var(--accent-emerald); }
+        .stat-urgent { color: var(--accent-rose); }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #34d399);
+            width: @(stats.CompletionPercentage)%;
+            transition: width 0.4s ease;
+        }
+
+        /* Filter Controls */
+        .filter-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            margin-bottom: 2rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .input-control, .select-control {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            padding: 8px 14px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .input-control:focus, .select-control:focus {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .pill-tab {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .pill-tab.active, .pill-tab:hover {
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        /* Task Cards Layout */
+        .task-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .task-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            position: relative;
+            transition: all 0.25 ease;
+        }
+
+        .task-card:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            background: var(--bg-card-hover);
+        }
+
+        .task-card.is-completed {
+            opacity: 0.65;
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .task-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .is-completed .task-title {
+            text-decoration: line-through;
+            color: var(--text-secondary);
+        }
+
+        .priority-badge {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+        }
+
+        .priority-Urgent { background: rgba(244, 63, 94, 0.2); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.4); }
+        .priority-High { background: rgba(245, 158, 11, 0.2); color: #fde047; border: 1px solid rgba(245, 158, 11, 0.4); }
+        .priority-Medium { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.4); }
+        .priority-Low { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4); }
+
+        .task-desc {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .task-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .category-pill {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            font-weight: 500;
+        }
+
+        .task-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: var(--radius-sm);
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .icon-btn:hover { background: rgba(255, 255, 255, 0.15); }
+        .icon-btn-danger:hover { background: rgba(244, 63, 94, 0.3); color: #fda4af; }
+        .icon-btn-success { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+
+        /* Modal styling */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-box {
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 540px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title { font-size: 1.25rem; font-weight: 700; }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .form-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+    </style>
+}
+
+<!-- KPI Analytics Counter Section -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-label">Total Tasks</span>
+        <span class="stat-value stat-total">@stats.TotalTasks</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">In Progress</span>
+        <span class="stat-value stat-progress">@stats.InProgressTasks</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Completed</span>
+        <span class="stat-value stat-completed">@stats.CompletedTasks</span>
+        <div class="progress-bar-container">
+            <div class="progress-bar-fill"></div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Urgent Items</span>
+        <span class="stat-value stat-urgent">@stats.UrgentTasks</span>
+    </div>
+</div>
+
+<!-- Search & Filter Bar -->
+<form method="get" action="/" class="filter-section">
+    <div class="filter-group">
+        <input type="text" name="search" value="@searchTerm" placeholder="🔍 Search tasks..." class="input-control" style="width: 220px;" />
+        
+        <select name="category" class="select-control" onchange="this.form.submit()">
+            <option value="">All Categories</option>
+            @foreach (var cat in categories)
+            {
+                <option value="@cat" selected="@(cat == currentCategory ? "selected" : null)">@cat</option>
+            }
+        </select>
+
+        <select name="status" class="select-control" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <option value="Todo" selected="@(currentStatus == "Todo" ? "selected" : null)">To Do</option>
+            <option value="InProgress" selected="@(currentStatus == "InProgress" ? "selected" : null)">In Progress</option>
+            <option value="Completed" selected="@(currentStatus == "Completed" ? "selected" : null)">Completed</option>
+        </select>
+    </div>
+
+    <div class="filter-group">
+        <a href="/" class="pill-tab @(string.IsNullOrEmpty(currentPriority) ? "active" : "")">All Priorities</a>
+        <a href="?priority=Urgent" class="pill-tab @(currentPriority == "Urgent" ? "active" : "")">Urgent</a>
+        <a href="?priority=High" class="pill-tab @(currentPriority == "High" ? "active" : "")">High</a>
+        <a href="?priority=Medium" class="pill-tab @(currentPriority == "Medium" ? "active" : "")">Medium</a>
+        <button type="submit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.85rem;">Filter</button>
+    </div>
+</form>
+
+<!-- Task Grid -->
+@if (!Model.Any())
+{
+    <div style="text-align: center; padding: 4rem 2rem; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border-color);">
+        <p style="font-size: 1.2rem; color: var(--text-secondary); margin-bottom: 1rem;">No tasks match your criteria.</p>
+        <button class="btn btn-primary" onclick="openCreateModal()">Create First Task</button>
+    </div>
+}
+else
+{
+    <div class="task-grid">
+        @foreach (var task in Model)
+        {
+            <div class="task-card @(task.Status == TaskPulse.Models.TaskStatus.Completed ? "is-completed" : "")" id="task-card-@task.Id">
+                <div class="task-header">
+                    <div class="task-title">@task.Title</div>
+                    <span class="priority-badge priority-@task.Priority">@task.Priority</span>
+                </div>
+                
+                <p class="task-desc">@task.Description</p>
+
+                <div class="task-meta">
+                    <span class="category-pill">📁 @task.Category</span>
+                    @if (task.DueDate.HasValue)
+                    {
+                        <span>📅 @task.DueDate.Value.ToString("MMM dd, yyyy")</span>
+                    }
+                    else
+                    {
+                        <span>No Due Date</span>
+                    }
+                </div>
+
+                <div class="task-actions" style="margin-top: auto;">
+                    <button class="icon-btn @(task.Status == TaskPulse.Models.TaskStatus.Completed ? "icon-btn-success" : "")" 
+                            onclick="toggleTaskStatus(@task.Id)" 
+                            title="Toggle Completed">
+                        @(task.Status == TaskPulse.Models.TaskStatus.Completed ? "✓ Completed" : "Mark Done")
+                    </button>
+
+                    <button class="icon-btn" onclick="openEditModal(@task.Id, '@JavaScriptStringEncode(task.Title)', '@JavaScriptStringEncode(task.Description)', '@JavaScriptStringEncode(task.Category)', '@task.Priority', '@task.Status', '@(task.DueDate?.ToString("yyyy-MM-dd"))')">
+                        ✏️ Edit
+                    </button>
+
+                    <button class="icon-btn icon-btn-danger" onclick="deleteTask(@task.Id)">
+                        🗑️ Delete
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- Create / Edit Modal Dialog -->
+<div class="modal-overlay" id="taskModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3 class="modal-title" id="modalHeading">Create Task</h3>
+            <button class="icon-btn" onclick="closeTaskModal()">✕</button>
+        </div>
+        <form id="taskForm" onsubmit="handleTaskSubmit(event)">
+            <input type="hidden" id="taskId" value="0" />
+            
+            <div class="form-group">
+                <label class="form-label">Task Title</label>
+                <input type="text" id="taskTitle" required class="input-control" placeholder="e.g. Implement API Endpoint" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea id="taskDesc" rows="3" class="input-control" placeholder="Add task details..."></textarea>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <input type="text" id="taskCategory" class="input-control" placeholder="Backend, Frontend, DevOps" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Priority</label>
+                    <select id="taskPriority" class="select-control">
+                        <option value="0">Low</option>
+                        <option value="1" selected>Medium</option>
+                        <option value="2">High</option>
+                        <option value="3">Urgent</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select id="taskStatus" class="select-control">
+                        <option value="0">To Do</option>
+                        <option value="1">In Progress</option>
+                        <option value="2">Completed</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Due Date</label>
+                    <input type="date" id="taskDueDate" class="input-control" />
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Task</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openCreateModal() {
+            document.getElementById('modalHeading').innerText = 'Create Task';
+            document.getElementById('taskId').value = '0';
+            document.getElementById('taskForm').reset();
+            document.getElementById('taskModal').style.display = 'flex';
+        }
+
+        function openEditModal(id, title, desc, cat, priority, status, dueDate) {
+            document.getElementById('modalHeading').innerText = 'Edit Task';
+            document.getElementById('taskId').value = id;
+            document.getElementById('taskTitle').value = title;
+            document.getElementById('taskDesc').value = desc;
+            document.getElementById('taskCategory').value = cat;
+            
+            // Map Priority enum
+            const pMap = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
+            document.getElementById('taskPriority').value = pMap[priority] !== undefined ? pMap[priority] : priority;
+
+            // Map Status enum
+            const sMap = { 'Todo': 0, 'InProgress': 1, 'Completed': 2 };
+            document.getElementById('taskStatus').value = sMap[status] !== undefined ? sMap[status] : status;
+
+            document.getElementById('taskDueDate').value = dueDate || '';
+            document.getElementById('taskModal').style.display = 'flex';
+        }
+
+        function closeTaskModal() {
+            document.getElementById('taskModal').style.display = 'none';
+        }
+
+        async function handleTaskSubmit(e) {
+            e.preventDefault();
+            const id = parseInt(document.getElementById('taskId').value);
+            const payload = {
+                id: id,
+                title: document.getElementById('taskTitle').value,
+                description: document.getElementById('taskDesc').value,
+                category: document.getElementById('taskCategory').value || 'General',
+                priority: parseInt(document.getElementById('taskPriority').value),
+                status: parseInt(document.getElementById('taskStatus').value),
+                dueDate: document.getElementById('taskDueDate').value || null
+            };
+
+            const url = id > 0 ? `/api/tasks/${id}` : '/api/tasks';
+            const method = id > 0 ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Error saving task');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Connection error');
+            }
+        }
+
+        async function toggleTaskStatus(id) {
+            try {
+                const res = await fetch(`/api/tasks/${id}/toggle`, { method: 'PATCH' });
+                if (res.ok) {
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function deleteTask(id) {
+            if (!confirm('Are you sure you want to delete this task?')) return;
+            try {
+                const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    </script>
+}
+
+@functions {
+    public static string JavaScriptStringEncode(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        return value.Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "");
+    }
+}

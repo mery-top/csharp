@@ -1,0 +1,15 @@
+@model TaskPulse.Controllers.ErrorViewModel
+@{
+    ViewData["Title"] = "Error";
+}
+
+<div style="text-align: center; padding: 4rem 2rem;">
+    <h1 style="color: var(--accent-rose); font-size: 2.5rem; margin-bottom: 1rem;">An error occurred while processing your request.</h1>
+    @if (Model.ShowRequestId)
+    {
+        <p style="color: var(--text-secondary);">Request ID: <code>@Model.RequestId</code></p>
+    }
+    <div style="margin-top: 2rem;">
+        <a href="/" class="btn btn-primary">Return to Dashboard</a>
+    </div>
+</div>
